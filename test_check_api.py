@@ -1,5 +1,10 @@
+import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from io import BytesIO
 from threading import Thread
+
+import pytest
+
 from check_api import probe, main
 
 
@@ -29,3 +34,24 @@ def test_healthy_and_failure_paths(tmp_path):
     finally:
         server.shutdown()
         worker.join(timeout=5)
+
+
+@pytest.mark.parametrize('payload', [[], ['ok'], 'ok', 42, 3.14, True, False, None])
+def test_non_object_json_is_unhealthy(payload, monkeypatch, tmp_path, capsys):
+    def open_health(url, timeout):
+        response = BytesIO(json.dumps(payload).encode('utf-8'))
+        response.status = 200
+        return response
+
+    monkeypatch.setattr('check_api.urlopen', open_health)
+    address = 'http://example.test'
+    report = probe(address)
+    assert report['healthy'] is False
+    assert report['http_status'] == 200
+
+    path = tmp_path / 'report.json'
+    assert main(['--url', address, '--out', str(path)]) == 1
+    written_report = json.loads(path.read_text())
+    assert written_report['healthy'] is False
+    assert written_report['http_status'] == 200
+    assert json.loads(capsys.readouterr().out) == written_report

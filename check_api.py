@@ -13,7 +13,10 @@ def probe(base_url: str, timeout: float = 3.0) -> dict:
     try:
         with urlopen(url, timeout=timeout) as res:
             data = json.loads(res.read().decode('utf-8'))
-            report.update({'http_status': res.status, 'healthy': res.status == 200 and data.get('status') == 'ok'})
+            report.update({
+                'http_status': res.status,
+                'healthy': res.status == 200 and isinstance(data, dict) and data.get('status') == 'ok',
+            })
     except (URLError, HTTPError, OSError, json.JSONDecodeError, ValueError) as e:
         report.update({'healthy': False, 'error': str(e)})
     return report
